@@ -1,8 +1,11 @@
 const serverless = require("serverless-http");
 const express = require("express");
+const AWS = require("aws-sdk");
 
 const app = express();
 app.use(express.json());
+
+const lambda = new AWS.Lambda();
 
 app.post("/claims", async (req, res) => {
   try {
@@ -14,11 +17,30 @@ app.post("/claims", async (req, res) => {
 
     const prompt = `Write a concise authorization justification letter in professional insurance language. Symptoms: ${symptoms} Prescribed medicines: ${medicines}`;
 
-    return res.status(200).json({ message: prompt });
+    const params = {
+        FunctionName: "Claims-dev-model",
+        InvocationType: "RequestResponse",
+        Payload: JSON.stringify({ prompt }),
+    };
+
+    const response = await lambda.invoke(params).promise();
+    const result = JSON.parse(response.Payload);
+
+    return res.status(200).json({ message: result.message });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "internal server error" });
+    return res.status(500).json({ error: err.message });
   }
+});
+
+// dummy endpoint until I figure out the model.
+app.post("/model", async (req, res) => {
+    const { prompt } = req.body || {};
+
+    if (!prompt) {
+      return res.status(400).json({ error: "prompt is required" });
+    }
+
+    return res.status(200).json({ message: `received prompt: ${prompt}` });
 });
 
 app.use((req, res, next) => {
